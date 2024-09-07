@@ -1,6 +1,6 @@
 import _thread
 from machine import UART
-import binascii
+import ubinascii as binascii
 
 class Mesh_Device():
     def __init__(self,uart_port,baudrate=115200):
@@ -33,13 +33,18 @@ class Mesh_Device():
                     msg_from = recv_data[1]
                     msg_data = binascii.unhexlify(recv_data[3])
                     if self.recv_callback:
-                        self.recv_callback(type = msg_type , source = msg_from ,msg = msg_data)
+                        send_back = self.recv_callback(type = msg_type , source = msg_from ,msg = msg_data)
+                        self.send(send_back)
             except Exception as e:
                 print ('recv_tesk:',e)
                 continue
 
-    def send(self,msg_data):
-        msg = b'AT+MDTS 0 ' + binascii.hexlify(msg_data) + b'\r\n'
+    def send(self,msg_data,msg_type='bin'):
+        if msg_type == 'bin':
+            msg = b'AT+MDTS 0 ' + binascii.hexlify(msg_data) + b'\r\n'
+            # print ('mesh_send',msg)
+        elif msg_type == 'str':
+            msg = b'AT+MDTS 0 ' + msg_data + b'\r\n'
         self.uart.write(msg)
 
 

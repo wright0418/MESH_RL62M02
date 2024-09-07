@@ -87,52 +87,46 @@ if __name__ == '__main__':
     unprov_KEY = Pin(Pin.epy.KEYA,Pin.IN,Pin.PULL_UP)
 
     def mesh_callback(**msg):
+        # print ('recv_data==' , msg)
         data = msg['msg']
-        if data[0:2] != HEADER:
-            return
-        if data[2] in (GET_TYPE,SET_TYPE):
-            if data[3:4] != ADDR+LENGTH: 
-                mesh.send(HEADER + data[2] + STATUS_ERROR)
-                return
-            if data[2] == GET_TYPE:
-                DI_data = b'\x01' if DI.get() else b'\x00'
-                mesh.send(HEADER + data[2]+ STATUS_OK +LENGTH+ DI_data)
-                return
-            if data[2] == SET_TYPE:
-                if data[4] == 0:
-                    DO.set(0)
-                else:
-                    DO.set(1)
-                mesh.send(HEADER + data[2]+ STATUS_OK)
-                return
-        elif data[2] == RTU_TYPE:
-            # RTU agent
-            modbus.send(data[3:0])
-            recv_data = modbus.receive(timeout = 200)
-            # print (recv_data)
-            if recv_data:
-                mesh.send(recv_data)
 
-            return
-        else :
-            mesh.send(HEADER + data[2] + STATUS_ERROR)
+        if len(data) == 4 and (bytes(data[2:3]) == GET_TYPE) and (bytes(data[:2]) == HEADER):
+            DI_data = DI.get()
+            if DI_data:
+                DI_data = b'\x01'
+            else:
+                DI_data = b'\x00'
+
+            return (HEADER + GET_TYPE + STATUS_OK + DI_data)
+        if len(data) == 5 and (bytes(data[2:3]) == SET_TYPE) and (bytes(data[:2]) == HEADER):
+            DO.set(data[4])
+            return (HEADER + SET_TYPE + STATUS_OK)
+    
+        if len(data) > 3 and (bytes(data[2:3]) == RTU_TYPE) and (bytes(data[:2]) == HEADER):
+
+            modbus.send(data[3:])
+            recv_data = modbus.receive(timeout = 200)
+            if recv_data:
+                return (HEADER + RTU_TYPE + recv_data)
+    
+        print ("Error packet",len(data),data[0],data[1],data[2],list(data))
 
     def DI_callback(value):
         # print('DI_callback:',value)
         if value == 1:
-            mesh.send(HEADER + GET_TYPE + STATUS_OK + LENGTH + b'\x01')
+            mesh.send(HEADER + GET_TYPE + STATUS_OK + b'\x01')
         else:
-            mesh.send(HEADER + GET_TYPE + STATUS_OK + LENGTH + b'\x00')
+            mesh.send(HEADER + GET_TYPE + STATUS_OK + b'\x00')
 
     #P10 -- Relay control
     DO= DigitalOut(Pin.epy.P10)
     DI = DigitalIN(Pin.epy.P19)
     DI.io_callback = DI_callback
     uart_port = 0
-    modbus = Rs485_Agent(uart_port, baudrate = 4800 ,ctl_pin=Pin.epy.KEYB)
+    modbus = Rs485_Agent(uart_port, baudrate = 9600 ,ctl_pin=Pin.epy.KEYB)
 
     mesh = Mesh_Device(1)
-    mesh.set_recv_callback(mesh_callback)
+    mesh.recv_callback=mesh_callback
 
     while True:
         if mesh.proved:
@@ -144,4 +138,6 @@ if __name__ == '__main__':
             g_led.off()
             mesh.unprov()     
         time.sleep(0.5)
+
+ 
 
